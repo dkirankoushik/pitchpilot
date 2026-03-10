@@ -120,7 +120,7 @@ export default function FounderDash() {
                   </div>
                   <p style={{ color: 'var(--text2)', fontSize: 13, marginBottom: 12, lineHeight: 1.5 }}>{startup.tagline}</p>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                    {[['Sector', startup.sector], ['Stage', startup.stage], ['Location', startup.location], ['Raising', startup.raise_amount]].map(([k, v]) => (
+                    {([['Sector', startup.sector || ''], ['Stage', startup.stage || ''], ['Location', startup.location || ''], ['Raising', startup.raise_amount || '']] as [string, string][]).map(([k, v]) => (
                       <div key={k} style={{ background: 'var(--surface2)', borderRadius: 9, padding: '9px 11px' }}>
                         <div style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: .7, marginBottom: 2 }}>{k}</div>
                         <div style={{ fontSize: 13, fontWeight: 700 }}>{v || '—'}</div>
