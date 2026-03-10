@@ -1,292 +1,194 @@
 'use client';
 import { useState, useEffect, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { supabase, getSession, type Profile, type Startup, type StartupDocument } from '@/lib/supabase';
+import { supabase, getSession } from '@/lib/supabase';
+import { useRouter, useParams } from 'next/navigation';
+import Nav from '@/components/Nav';
 
-const CARD_BG = ['#F0EDE8', '#EBF0E8', '#E8EDF0', '#F0E8ED', '#EDE8F0'];
+const PITCH_VIDEOS = [
+  { id: 'pVPfy5lV7oA', sector: 'FinTech', icon: '💳' },
+  { id: 'Wd5KxIUBqrE', sector: 'HealthTech', icon: '🏥' },
+  { id: 'eTR7KGf7kKc', sector: 'SaaS', icon: '⚡' },
+  { id: 'WumFiUlwQ7g', sector: 'AgriTech', icon: '🌾' },
+  { id: 'L1kbrlZRDvU', sector: 'EdTech', icon: '📚' },
+  { id: 'nKIu9yen5nc', sector: 'CleanTech', icon: '☀️' },
+];
 
-function Av({ name, sz = 48 }: { name: string; sz?: number }) {
-  const cs = ['#D4C5F9', '#C5D4F9', '#C5F9D4', '#F9D4C5', '#F9C5D4'];
-  return (
-    <div style={{ width: sz, height: sz, borderRadius: sz / 3.5, background: cs[name.charCodeAt(0) % cs.length], display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: sz * .38, color: 'var(--ink)', flexShrink: 0, border: '2.5px solid var(--border)' }}>
-      {name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
-    </div>
-  );
-}
+interface Profile { id: string; full_name: string | null; email: string; role: string; credits: number; }
 
-function PageLoader() {
-  return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
-      <div style={{ width: 36, height: 36, border: '2px solid var(--border)', borderTop: '2px solid var(--ink)', borderRadius: '50%', animation: 'spin .7s linear infinite' }} />
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-    </div>
-  );
-}
-
-// Inner component — useSearchParams MUST live inside a <Suspense> boundary
-function ProfileContent({ id }: { id: string }) {
+function ProfileContent() {
   const router = useRouter();
-  const sp = useSearchParams();
-  const startupId = sp.get('startup');
-
-  const [viewer, setViewer] = useState<Profile | null>(null);
-  const [founder, setFounder] = useState<Profile | null>(null);
-  const [startup, setStartup] = useState<Startup | null>(null);
-  const [subbed, setSubbed] = useState(false);
-  const [docs, setDocs] = useState<StartupDocument[]>([]);
-  const [tab, setTab] = useState<'about' | 'team' | 'docs'>('about');
+  const params = useParams();
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [isSelf, setIsSelf] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [subbing, setSubbing] = useState(false);
+  const [tab, setTab] = useState<'grid' | 'tagged'>('grid');
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editBio, setEditBio] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [showLogout, setShowLogout] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      const session = await getSession(); const user = session?.user ?? null;
-      if (!user) { router.push('/'); return; }
-      const [{ data: v }, { data: f }] = await Promise.all([
-        supabase.from('profiles').select('*').eq('id', user.id).single(),
-        supabase.from('profiles').select('*').eq('id', id).single(),
-      ]);
-      if (cancelled) return;
-      setViewer(v);
-      setFounder(f || v);
-      if (startupId) {
-        const [{ data: s }, { data: sub }, { data: d }] = await Promise.all([
-          supabase.from('startups').select('*').eq('id', startupId).single(),
-          supabase.from('subscriptions').select('id').eq('subscriber_id', user.id).eq('startup_id', startupId).eq('status', 'active').single(),
-          supabase.from('startup_documents').select('*').eq('startup_id', startupId).order('created_at'),
-        ]);
-        if (cancelled) return;
-        setStartup(s);
-        setDocs(d || []);
-        setSubbed(!!sub || v?.role === 'admin' || v?.id === id);
-      }
+    const load = async () => {
+      const session = await getSession();
+      if (!session) { router.replace('/'); return; }
+      const selfId = session.user.id;
+      const targetId = params.id === 'me' ? selfId : String(params.id);
+      setIsSelf(targetId === selfId);
+
+      const { data } = await supabase.from('profiles').select('*').eq('id', targetId).single();
+      if (data) { setProfile(data); setEditName(data.full_name || ''); }
       setLoading(false);
-    }
+    };
     load();
-    return () => { cancelled = true; };
-  }, [id, startupId, router]);
+  }, [params.id, router]);
 
-  async function subscribe() {
-    if (!viewer || !startup) return;
-    setSubbing(true);
-    await supabase.from('subscriptions').upsert({
-      subscriber_id: viewer.id,
-      startup_id: startup.id,
-      plan: 'unlock',
-      status: 'active',
-    });
-    setSubbed(true);
-    setSubbing(false);
-  }
-
-  if (loading) return <PageLoader />;
-
-  const bg = CARD_BG[(founder?.full_name || '').charCodeAt(0) % CARD_BG.length];
-  const fn = founder?.full_name || 'Founder';
-
-  const mockTeam = [
-    { name: fn, role: 'CEO & Co-Founder', badge: 'Founder' },
-    { name: 'Co-Founder', role: 'CTO & Co-Founder', badge: '' },
-    { name: 'Team Member', role: 'Head of Product', badge: '' },
-  ];
-
-  const mockDocs: { title: string; type: 'pitch_deck' | 'financials' | 'legal' | 'product'; locked: boolean }[] = [
-    { title: 'Pitch Deck', type: 'pitch_deck', locked: !subbed },
-    { title: 'Financial Projections', type: 'financials', locked: !subbed },
-    { title: 'Product Roadmap', type: 'product', locked: !subbed },
-    { title: 'Cap Table & Legal', type: 'legal', locked: !subbed },
-  ];
-
-  type DisplayDoc = (StartupDocument & { locked: boolean }) | typeof mockDocs[0];
-  const displayDocs: DisplayDoc[] = docs.length > 0
-    ? docs.map(d => ({ ...d, locked: !subbed && !d.is_public }))
-    : mockDocs;
-
-  const typeIcon: Record<string, string> = {
-    pitch_deck: '📊',
-    financials: '💰',
-    legal: '⚖️',
-    product: '🗺️',
-    other: '📄',
+  const saveProfile = async () => {
+    if (!profile) return;
+    setSaving(true);
+    await supabase.from('profiles').update({ full_name: editName }).eq('id', profile.id);
+    setProfile(p => p ? { ...p, full_name: editName } : p);
+    setEditing(false); setSaving(false);
   };
 
-  const stats: [string, string][] = [
-    ['📍', startup?.location || '—'],
-    ['💰', startup?.raise_amount || '—'],
-    ['📈', startup?.mrr || '—'],
-  ];
+  const logout = async () => {
+    await supabase.auth.signOut();
+    router.replace('/');
+  };
 
-  const details: [string, string][] = [
-    ['Sector', startup?.sector || '—'],
-    ['Founded', String(startup?.founded_year || '2023')],
-    ['Team', (startup?.team_size ?? 0) + ' people'],
-    ['Website', startup?.website || '—'],
-  ];
+  if (loading) return (
+    <div className="app-shell">
+      <div className="page-loader"><div className="spin" /></div>
+    </div>
+  );
+
+  if (!profile) return <div className="app-shell"><div className="page-loader"><p style={{ color: 'var(--text2)' }}>Profile not found</p></div></div>;
+
+  const initials = profile.full_name?.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase() || profile.email[0].toUpperCase();
+  const displayName = profile.full_name || profile.email.split('@')[0];
+  const roleIcon = profile.role === 'investor' ? '💼' : profile.role === 'admin' ? '⚙️' : '🚀';
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
-      {/* Top bar */}
-      <div style={{ position: 'sticky', top: 0, zIndex: 50, background: 'rgba(247,246,243,.95)', backdropFilter: 'blur(12px)', borderBottom: '1px solid var(--border)', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button onClick={() => router.back()} style={{ width: 36, height: 36, borderRadius: 9, background: 'var(--surface)', border: '1px solid var(--border)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 19, color: 'var(--text)' }}>
-          ‹
-        </button>
-        <div style={{ fontWeight: 700, fontSize: 16, flex: 1 }}>{startup?.name || fn}</div>
-        {startup && (
-          subbed
-            ? <span className="tag tag-green" style={{ fontSize: 12 }}>✓ Unlocked</span>
-            : <span className="tag tag-amber" style={{ fontSize: 12 }}>🔒 Locked</span>
-        )}
-      </div>
-
-      {/* Cover */}
-      <div style={{ height: 150, background: bg, position: 'relative' }}>
-        {!subbed && startup && (
-          <div style={{ position: 'absolute', top: 14, right: 14 }}>
-            <button onClick={subscribe} disabled={subbing} className="btn btn-ink" style={{ fontSize: 13, padding: '8px 18px', borderRadius: 9 }}>
-              {subbing ? '…' : '🔓 Unlock · $9/mo'}
-            </button>
-          </div>
-        )}
-        <div style={{ position: 'absolute', bottom: -36, left: 20 }}>
-          <div style={{ border: '3px solid var(--surface)', borderRadius: 18, overflow: 'hidden' }}>
-            <Av name={fn} sz={72} />
-          </div>
+    <div className="app-shell">
+      <Nav user={{ name: displayName, role: profile.role, email: profile.email }} />
+      <main className="main-content">
+        {/* Mobile top bar */}
+        <div className="top-bar">
+          <button onClick={() => router.back()} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--text)', padding: '0 8px 0 0' }}>←</button>
+          <span className="top-logo" style={{ fontSize: 17 }}>{displayName}</span>
+          {isSelf && (
+            <button onClick={() => setShowLogout(!showLogout)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--text)' }}>☰</button>
+          )}
         </div>
-      </div>
 
-      {/* Content */}
-      <div style={{ paddingTop: 52, padding: '52px 20px 100px' }}>
-        <h1 style={{ fontSize: 22, fontWeight: 800, marginBottom: 3, letterSpacing: '-.3px' }}>{fn}</h1>
-        {startup && <div style={{ color: 'var(--text2)', fontSize: 14, marginBottom: 2 }}>Founder of {startup.name}</div>}
-        <div style={{ color: 'var(--text3)', fontSize: 13, marginBottom: 18 }}>{founder?.email}</div>
+        {/* Logout dropdown (mobile) */}
+        {showLogout && isSelf && (
+          <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', padding: '12px 16px' }}>
+            <button onClick={logout} className="btn btn-danger btn-full btn-sm">Sign out of PitchPilot</button>
+          </div>
+        )}
 
-        {/* Startup card */}
-        {startup && (
-          <div className="card" style={{ padding: 18, marginBottom: 22 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-              <div>
-                <div style={{ fontWeight: 800, fontSize: 18, letterSpacing: '-.3px' }}>{startup.name}</div>
-                <div style={{ color: 'var(--text2)', fontSize: 13, marginTop: 2 }}>{startup.tagline}</div>
-              </div>
-              <span className="tag tag-green" style={{ fontSize: 12 }}>{startup.stage}</span>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
-              {stats.map(([ic, v]) => (
-                <div key={ic} style={{ background: 'var(--surface2)', borderRadius: 9, padding: '9px 10px', textAlign: 'center' }}>
-                  <div style={{ fontSize: 16, marginBottom: 2 }}>{ic}</div>
-                  <div style={{ fontSize: 12, fontWeight: 700 }}>{v}</div>
+        <div style={{ maxWidth: 480, margin: '0 auto' }}>
+          {/* Profile header */}
+          <div className="prof-header">
+            <div className="prof-av" style={{ background: 'var(--ink)', color: '#F7F6F3', fontWeight: 800, fontSize: 28 }}>{initials}</div>
+            <div className="prof-stats">
+              {[['12', 'Pitches'], ['3.4K', 'Reach'], ['284', 'Likes']].map(([n, l]) => (
+                <div key={l}>
+                  <span className="prof-stat-n">{n}</span>
+                  <span className="prof-stat-l">{l}</span>
                 </div>
               ))}
             </div>
           </div>
-        )}
 
-        {/* Tabs */}
-        <div style={{ display: 'flex', gap: 4, marginBottom: 20, background: 'var(--s50)', borderRadius: 11, padding: 4 }}>
-          {(['about', 'team', 'docs'] as const).map(t => (
-            <button key={t} onClick={() => setTab(t)} style={{ flex: 1, padding: '9px', borderRadius: 8, border: 'none', background: tab === t ? 'var(--surface)' : 'transparent', color: tab === t ? 'var(--text)' : 'var(--text2)', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s', boxShadow: tab === t ? 'var(--shadow1)' : 'none', textTransform: 'capitalize' }}>
-              {t}
-            </button>
-          ))}
-        </div>
+          {/* Bio */}
+          {!editing ? (
+            <div className="prof-bio">
+              <div className="prof-name">{displayName}</div>
+              <div className="prof-role-badge">{roleIcon} {profile.role.charAt(0).toUpperCase() + profile.role.slice(1)}</div>
+              <div className="prof-desc" style={{ color: 'var(--text2)' }}>
+                {editBio || 'Building the future one pitch at a time. 🚀'}
+              </div>
+              <div style={{ marginTop: 6, fontSize: 13, color: 'var(--text3)' }}>📍 India · {profile.credits} credits remaining</div>
+            </div>
+          ) : (
+            <div style={{ padding: '0 16px 14px' }}>
+              <div className="form-group">
+                <label className="label">Display Name</label>
+                <input className="input" value={editName} onChange={e => setEditName(e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label className="label">Bio</label>
+                <textarea className="input textarea" value={editBio} onChange={e => setEditBio(e.target.value)} placeholder="Tell your story..." />
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-ink btn-sm" onClick={saveProfile} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => setEditing(false)}>Cancel</button>
+              </div>
+            </div>
+          )}
 
-        {/* About */}
-        {tab === 'about' && (
-          <div>
-            {startup?.description && (
-              <div style={{ marginBottom: 18 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: .9, marginBottom: 8 }}>About</div>
-                <p style={{ fontSize: 15, lineHeight: 1.7 }}>{startup.description}</p>
-              </div>
-            )}
-            {startup?.traction && (
-              <div style={{ background: 'var(--greenBg)', border: '1px solid var(--greenBorder)', borderRadius: 12, padding: '13px 16px', marginBottom: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--green)', textTransform: 'uppercase', letterSpacing: .9, marginBottom: 5 }}>Traction</div>
-                <div style={{ fontSize: 15, fontWeight: 600 }}>{startup.traction}</div>
-              </div>
-            )}
-            {startup && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                {details.map(([k, v]) => (
-                  <div key={k} className="card" style={{ padding: '13px 14px' }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: .8, marginBottom: 4 }}>{k}</div>
-                    <div style={{ fontSize: 14, fontWeight: 700 }}>{v}</div>
-                  </div>
-                ))}
-              </div>
+          {/* Action buttons */}
+          <div className="prof-actions">
+            {isSelf ? (
+              <>
+                <button className="btn btn-outline btn-sm" style={{ flex: 1 }} onClick={() => setEditing(!editing)}>Edit Profile</button>
+                <button className="btn btn-outline btn-sm" onClick={() => router.push('/pitch/new')}>+ New Pitch</button>
+                <button className="btn btn-danger btn-sm btn-icon" onClick={logout} title="Sign out">⏻</button>
+              </>
+            ) : (
+              <>
+                <button className="btn btn-ink btn-sm" style={{ flex: 1 }}>Follow</button>
+                <button className="btn btn-outline btn-sm" style={{ flex: 1 }}>Message</button>
+              </>
             )}
           </div>
-        )}
 
-        {/* Team */}
-        {tab === 'team' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {mockTeam.map((m, i) => (
-              <div key={i} className="card" style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-                <Av name={m.name} sz={44} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: 15 }}>{m.name}</div>
-                  <div style={{ color: 'var(--text2)', fontSize: 13, marginTop: 2 }}>{m.role}</div>
-                </div>
-                {m.badge && <span className="tag tag-green" style={{ fontSize: 11 }}>{m.badge}</span>}
-              </div>
-            ))}
+          {/* Tab bar */}
+          <div className="prof-tabs">
+            <button className={`prof-tab${tab === 'grid' ? ' active' : ''}`} onClick={() => setTab('grid')}>⊞</button>
+            <button className={`prof-tab${tab === 'tagged' ? ' active' : ''}`} onClick={() => setTab('tagged')}>🔖</button>
           </div>
-        )}
 
-        {/* Docs */}
-        {tab === 'docs' && (
-          <div>
-            {!subbed && (
-              <div style={{ background: 'var(--amberBg)', border: '1px solid var(--amberBorder)', borderRadius: 13, padding: '14px 16px', marginBottom: 16, display: 'flex', gap: 10 }}>
-                <span style={{ fontSize: 20 }}>🔒</span>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--amber)', marginBottom: 4 }}>Documents are locked</div>
-                  <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.5 }}>Subscribe for $9/month to access pitch deck, financials, legal docs, and more.</div>
-                  <button onClick={subscribe} disabled={subbing} className="btn btn-ink" style={{ marginTop: 10, fontSize: 13, padding: '8px 18px', borderRadius: 9 }}>
-                    {subbing ? '…' : 'Unlock now — $9/mo'}
-                  </button>
-                </div>
-              </div>
-            )}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-              {displayDocs.map((doc, i) => (
-                <div key={i} className="card" style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, opacity: doc.locked ? .65 : 1 }}>
-                  <div style={{ width: 42, height: 42, borderRadius: 11, background: doc.locked ? 'var(--border)' : 'var(--greenBg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 19, flexShrink: 0 }}>
-                    {doc.locked ? '🔒' : typeIcon[doc.type]}
+          {/* Grid of pitch thumbnails */}
+          {tab === 'grid' && (
+            <div className="prof-grid">
+              {PITCH_VIDEOS.map((v, i) => (
+                <a key={i} href={`https://youtube.com/watch?v=${v.id}`} target="_blank" rel="noopener noreferrer" className="prof-grid-item">
+                  <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 4, background: `hsl(${i * 40},20%,93%)` }}>
+                    <span style={{ fontSize: 28 }}>{v.icon}</span>
+                    <span style={{ fontSize: 10, color: 'var(--text2)', fontWeight: 600 }}>{v.sector}</span>
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: 14, color: doc.locked ? 'var(--text3)' : 'var(--text)' }}>{doc.title}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text3)', textTransform: 'capitalize', marginTop: 1 }}>{doc.type.replace('_', ' ')}</div>
+                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(28,26,23,.35)', opacity: 0, transition: 'opacity .15s' }}
+                    onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+                    onMouseLeave={e => (e.currentTarget.style.opacity = '0')}>
+                    <span style={{ color: '#fff', fontSize: 24 }}>▶</span>
                   </div>
-                  {!doc.locked && <button className="btn btn-green" style={{ fontSize: 12, padding: '6px 14px', borderRadius: 8 }}>View →</button>}
-                </div>
+                </a>
               ))}
             </div>
-          </div>
-        )}
-      </div>
+          )}
+          {tab === 'tagged' && (
+            <div className="empty">
+              <div className="empty-ic">🔖</div>
+              <div className="empty-title">No saved pitches yet</div>
+              <div style={{ color: 'var(--text3)', fontSize: 14 }}>Bookmark pitches you want to revisit</div>
+            </div>
+          )}
 
-      {/* Sticky unlock bar */}
-      {startup && !subbed && (
-        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: '12px 20px', background: 'rgba(247,246,243,.96)', borderTop: '1px solid var(--border)', backdropFilter: 'blur(12px)', paddingBottom: 'max(12px,env(safe-area-inset-bottom))' }}>
-          <button onClick={subscribe} disabled={subbing} className="btn btn-ink" style={{ width: '100%', padding: '14px', fontSize: 15, borderRadius: 12 }}>
-            {subbing ? 'Processing…' : '🔓 Unlock full access — $9 / month'}
-          </button>
+          {/* Bottom padding */}
+          <div style={{ height: 32 }} />
         </div>
-      )}
-
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      </main>
     </div>
   );
 }
 
-// Page export — Suspense boundary required for useSearchParams in Next.js 14
-export default function ProfilePage({ params }: { params: { id: string } }) {
+export default function ProfilePage() {
   return (
-    <Suspense fallback={<PageLoader />}>
-      <ProfileContent id={params.id} />
+    <Suspense fallback={<div className="page-loader"><div className="spin" /></div>}>
+      <ProfileContent />
     </Suspense>
   );
 }
