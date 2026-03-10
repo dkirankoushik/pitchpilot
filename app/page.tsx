@@ -2,172 +2,136 @@
 import { useState, useEffect } from 'react';
 import { supabase, getSession } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
-import Nav from '@/components/Nav';
 
-// Startup pitch YouTube video IDs (real startup/pitch related content)
-const PITCH_VIDEOS = [
-  { id: 'pVPfy5lV7oA', company: 'NeuralPay', founder: 'Arjun Mehta', sector: 'FinTech', stage: 'Seed', raise: '$500K', mrr: '$12K', location: 'Mumbai', desc: 'Revolutionizing UPI-based lending with AI credit scoring. We help 200M Indians access credit in 90 seconds.', likes: 284, comments: 47, time: '2h ago', avatar: '👨‍💻' },
-  { id: 'Wd5KxIUBqrE', company: 'MedSync', founder: 'Priya Sharma', sector: 'HealthTech', stage: 'Pre-Seed', raise: '$250K', mrr: '$4K', location: 'Bangalore', desc: 'Connecting patients to specialists in tier-2 cities via telemedicine. 10K consultations in 3 months.', likes: 189, comments: 32, time: '5h ago', avatar: '👩‍⚕️' },
-  { id: 'eTR7KGf7kKc', company: 'FlowDesk', founder: 'Rahul Verma', sector: 'SaaS', stage: 'Series A', raise: '$2M', mrr: '$85K', location: 'Hyderabad', desc: 'No-code workflow automation for SMBs. Think Zapier but built for India — vernacular support, UPI billing.', likes: 456, comments: 89, time: '8h ago', avatar: '👨‍🔧' },
-  { id: 'WumFiUlwQ7g', company: 'AgriChain', founder: 'Sneha Patel', sector: 'AgriTech', stage: 'Seed', raise: '$750K', mrr: '$28K', location: 'Pune', desc: 'Farm-to-fork supply chain platform eliminating 3 layers of middlemen. Working with 2,400 farmers.', likes: 312, comments: 54, time: '1d ago', avatar: '👩‍🌾' },
-  { id: 'L1kbrlZRDvU', company: 'EduVerse', founder: 'Karan Singh', sector: 'EdTech', stage: 'Pre-Seed', raise: '$300K', mrr: '$7K', location: 'Delhi', desc: 'AI-powered personalized learning in regional languages. 40% better outcomes vs traditional coaching.', likes: 221, comments: 38, time: '1d ago', avatar: '👨‍🏫' },
-  { id: 'nKIu9yen5nc', company: 'GreenGrid', founder: 'Ananya Roy', sector: 'CleanTech', stage: 'Seed', raise: '$1M', mrr: '$35K', location: 'Chennai', desc: 'Peer-to-peer solar energy trading marketplace. Households sell surplus power directly to neighbors.', likes: 547, comments: 112, time: '2d ago', avatar: '👩‍🔬' },
-];
-
-interface FeedPost { id: string; company: string; founder: string; sector: string; stage: string; raise: string; mrr: string; location: string; desc: string; likes: number; comments: number; time: string; avatar: string; }
-
-function VideoCard({ post, currentUser }: { post: FeedPost & { id: string }; currentUser: string }) {
-  const [liked, setLiked] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [likeCount, setLikeCount] = useState(post.likes);
-  const [showMenu, setShowMenu] = useState(false);
-
-  const stageColor: Record<string, string> = { 'Seed': 'tag-green', 'Pre-Seed': 'tag-amber', 'Series A': 'tag-blue', 'Series B': 'tag-ink' };
-
-  return (
-    <article className="feed-card fade-in">
-      {/* Header */}
-      <div className="fc-header">
-        <div className="fc-av" style={{ background: '#1C1A17', color: '#F7F6F3', fontWeight: 700, fontSize: 14 }}>{post.avatar}</div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="fc-name">{post.company}</div>
-          <div className="fc-sub">{post.founder} · {post.location}</div>
-        </div>
-        <div style={{ position: 'relative' }}>
-          <button className="fc-more" onClick={() => setShowMenu(!showMenu)}>⋯</button>
-          {showMenu && (
-            <div style={{ position: 'absolute', right: 0, top: '100%', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '4px 0', minWidth: 160, zIndex: 50, boxShadow: '0 8px 24px rgba(28,26,23,.12)' }}>
-              {[['Share', '↗'], ['Save', '🔖'], ['Report', '⚑']].map(([lb, ic]) => (
-                <button key={lb} onClick={() => setShowMenu(false)} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, fontFamily: 'inherit', color: 'var(--text)' }}>
-                  <span>{ic}</span>{lb}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Tags row */}
-      <div style={{ padding: '0 16px 10px', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        <span className={`tag ${stageColor[post.stage] || 'tag'}`}>{post.stage}</span>
-        <span className="tag">{post.sector}</span>
-        <span className="tag">Raising {post.raise}</span>
-        {post.mrr && <span className="tag tag-green">MRR {post.mrr}</span>}
-      </div>
-
-      {/* YouTube Video */}
-      <div className="video-wrap">
-        <iframe
-          src={`https://www.youtube.com/embed/${post.id}?rel=0&modestbranding=1`}
-          title={`${post.company} pitch`}
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-          loading="lazy"
-        />
-      </div>
-
-      {/* Actions */}
-      <div className="fc-actions">
-        <button className={`fc-btn${liked ? ' liked' : ''}`} onClick={() => { setLiked(!liked); setLikeCount(c => liked ? c - 1 : c + 1); }}>
-          {liked ? '♥' : '♡'}
-        </button>
-        <button className="fc-btn">💬</button>
-        <button className="fc-btn">↗</button>
-        <button className={`fc-btn${saved ? ' saved' : ''} fc-share`} onClick={() => setSaved(!saved)}>
-          {saved ? '🔖' : '⊹'}
-        </button>
-      </div>
-
-      {/* Likes */}
-      <div className="fc-likes">{likeCount.toLocaleString()} likes</div>
-
-      {/* Caption */}
-      <div className="fc-caption">
-        <strong>{post.company}</strong>{post.desc}
-      </div>
-
-      {/* Comment hint */}
-      <div style={{ padding: '0 16px 6px', color: 'var(--text3)', fontSize: 13 }}>View all {post.comments} comments</div>
-
-      {/* Time */}
-      <div className="fc-time">{post.time}</div>
-    </article>
-  );
+function Spin() {
+  return <span className="spin spin-sm" style={{ display: 'inline-block' }} />;
 }
 
-function StoriesBar({ userId }: { userId: string }) {
-  const stories = [
-    { name: 'Your story', av: '＋', own: true },
-    { name: 'NeuralPay', av: '🤖' },
-    { name: 'MedSync', av: '🏥' },
-    { name: 'FlowDesk', av: '⚡' },
-    { name: 'AgriChain', av: '🌾' },
-    { name: 'EduVerse', av: '📚' },
-    { name: 'GreenGrid', av: '☀️' },
-  ];
-  return (
-    <div className="stories-bar">
-      {stories.map((s, i) => (
-        <div key={i} className="story-item">
-          <div className={`story-ring${i === 0 ? ' add-new' : ''}`}>
-            <div className="story-av">{s.av}</div>
-          </div>
-          <span className="story-label">{s.name}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-export default function FeedPage() {
+export default function Home() {
   const router = useRouter();
-  const [userId, setUserId] = useState('');
-  const [userName, setUserName] = useState('');
-  const [userRole, setUserRole] = useState('founder');
-  const [loading, setLoading] = useState(true);
+  const [view, setView] = useState<'login' | 'signup'>('login');
+  const [role, setRole] = useState<'founder' | 'investor'>('founder');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [checking, setChecking] = useState(true);
+  const [err, setErr] = useState('');
+  const [ok, setOk] = useState('');
 
   useEffect(() => {
     getSession().then(s => {
-      if (!s) { router.replace('/'); return; }
-      setUserId(s.user.id);
-      supabase.from('profiles').select('full_name,role').eq('id', s.user.id).single().then(({ data }) => {
-        if (data) { setUserName(data.full_name || ''); setUserRole(data.role); }
-        setLoading(false);
+      if (!s) { setChecking(false); return; }
+      supabase.from('profiles').select('role').eq('id', s.user.id).single().then(({ data }) => {
+        const r = data?.role || 'founder';
+        router.replace(r === 'admin' ? '/dashboard/admin' : r === 'investor' ? '/feed' : '/feed');
       });
     });
   }, [router]);
 
-  if (loading) return (
-    <div className="app-shell">
-      <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-        <div className="spin" />
-      </div>
+  if (checking) return (
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="spin" />
     </div>
   );
 
+  const auth = async () => {
+    setErr(''); setOk(''); setBusy(true);
+    try {
+      if (view === 'signup') {
+        const { error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: name, role } } });
+        if (error) throw error;
+        setOk('Account created! Check your email to verify, then sign in.');
+        setView('login');
+      } else {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        const { data: p } = await supabase.from('profiles').select('role').eq('id', data.user.id).single();
+        const r = p?.role || 'founder';
+        router.replace(r === 'admin' ? '/dashboard/admin' : '/feed');
+      }
+    } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Invalid credentials'); }
+    finally { setBusy(false); }
+  };
+
   return (
-    <div className="app-shell">
-      <Nav user={{ name: userName, role: userRole, email: '' }} />
-      <main className="main-content">
-        {/* Mobile top bar */}
-        <div className="top-bar">
-          <span className="top-logo">PitchPilot</span>
-          <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-            <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: 'var(--text)' }}>♡</button>
-            <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: 'var(--text)' }}>✉</button>
-          </div>
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
+      {/* Hero header */}
+      <div style={{ textAlign: 'center', padding: '56px 24px 32px' }}>
+        <div style={{ width: 56, height: 56, borderRadius: 16, background: 'var(--ink)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 24, margin: '0 auto 16px', fontWeight: 800 }}>▶</div>
+        <h1 style={{ fontSize: 'clamp(28px,7vw,40px)', fontWeight: 800, letterSpacing: '-1px', marginBottom: 8 }}>PitchPilot</h1>
+        <p style={{ color: 'var(--text2)', fontSize: 15, maxWidth: 300, margin: '0 auto' }}>Where founders pitch. Investors discover.</p>
+      </div>
+
+      {/* Auth card */}
+      <div style={{ maxWidth: 400, width: '100%', margin: '0 auto', padding: '0 20px 48px' }}>
+        {/* Toggle */}
+        <div style={{ display: 'flex', gap: 0, background: 'var(--border)', borderRadius: 12, padding: 3, marginBottom: 20 }}>
+          {(['login', 'signup'] as const).map(v => (
+            <button key={v} onClick={() => { setView(v); setErr(''); setOk(''); }}
+              style={{ flex: 1, padding: '9px', borderRadius: 10, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, fontSize: 14, transition: 'all .15s', background: view === v ? 'var(--surface)' : 'transparent', color: view === v ? 'var(--text)' : 'var(--text2)', boxShadow: view === v ? '0 1px 4px rgba(28,26,23,.1)' : 'none' }}>
+              {v === 'login' ? 'Sign In' : 'Create Account'}
+            </button>
+          ))}
         </div>
 
-        <div className="feed-center">
-          <StoriesBar userId={userId} />
-          {PITCH_VIDEOS.map((post, i) => (
-            <VideoCard key={i} post={post} currentUser={userId} />
-          ))}
-          <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>
-            You're all caught up · Check back soon for new pitches
+        <div className="card" style={{ padding: '24px 20px' }}>
+          {view === 'signup' && (
+            <>
+              <div className="form-group">
+                <label className="label">Full Name</label>
+                <input className="input" value={name} onChange={e => setName(e.target.value)} placeholder="Your full name" />
+              </div>
+              <div className="form-group">
+                <label className="label">I am a</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  {([['founder', '🚀', 'Founder'], ['investor', '💼', 'Investor']] as const).map(([r, ic, lb]) => (
+                    <button key={r} onClick={() => setRole(r)}
+                      style={{ padding: '11px', borderRadius: 10, border: '1.5px solid', borderColor: role === r ? 'var(--ink)' : 'var(--border)', background: role === r ? 'var(--ink)' : 'transparent', color: role === r ? '#fff' : 'var(--text2)', cursor: 'pointer', fontSize: 14, fontWeight: 600, fontFamily: 'inherit', transition: 'all .15s' }}>
+                      {ic} {lb}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+          <div className="form-group">
+            <label className="label">Email</label>
+            <input className="input" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" onKeyDown={e => e.key === 'Enter' && auth()} />
+          </div>
+          <div className="form-group" style={{ marginBottom: 20 }}>
+            <label className="label">Password</label>
+            <input className="input" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" onKeyDown={e => e.key === 'Enter' && auth()} />
+          </div>
+          {err && <div style={{ background: 'var(--roseBg)', border: '1px solid var(--roseBorder)', borderRadius: 9, padding: '10px 14px', color: 'var(--rose)', fontSize: 13, marginBottom: 14 }}>{err}</div>}
+          {ok && <div style={{ background: 'var(--greenBg)', border: '1px solid var(--greenBorder)', borderRadius: 9, padding: '10px 14px', color: 'var(--green)', fontSize: 13, marginBottom: 14 }}>{ok}</div>}
+          <button className="btn btn-ink btn-full" style={{ padding: '13px', fontSize: 15, borderRadius: 11 }} onClick={auth} disabled={busy}>
+            {busy ? <Spin /> : view === 'login' ? 'Sign In →' : 'Create Account →'}
+          </button>
+        </div>
+
+        {view === 'login' && (
+          <p style={{ textAlign: 'center', marginTop: 16, fontSize: 13, color: 'var(--text2)' }}>
+            No account?{' '}
+            <button onClick={() => setView('signup')} style={{ background: 'none', border: 'none', color: 'var(--text)', fontWeight: 700, cursor: 'pointer', fontSize: 13, fontFamily: 'inherit', textDecoration: 'underline' }}>
+              Sign up free
+            </button>
+          </p>
+        )}
+
+        <div style={{ marginTop: 32, textAlign: 'center' }}>
+          <p style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 14, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>The platform</p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
+            {[['▶', 'Video pitches'], ['✦', 'AI matching'], ['◎', 'Ecosystem']].map(([ic, lb]) => (
+              <div key={lb} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '12px 8px', textAlign: 'center' }}>
+                <div style={{ fontSize: 20, marginBottom: 4 }}>{ic}</div>
+                <div style={{ fontSize: 11, color: 'var(--text2)', fontWeight: 600 }}>{lb}</div>
+              </div>
+            ))}
           </div>
         </div>
-      </main>
+      </div>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}.spin{border-radius:50%;animation:spin .7s linear infinite}`}</style>
     </div>
   );
 }
