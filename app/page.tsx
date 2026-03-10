@@ -1,226 +1,232 @@
 'use client';
-import { useState } from 'react';
-import { supabase } from '@/lib/supabase';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { supabase, type Profile, type Startup, type StartupDocument } from '@/lib/supabase';
 
-const DEMO = { founder: 'demo.founder@pitchpilot.app', investor: 'demo.investor@pitchpilot.app', admin: 'demo.admin@pitchpilot.app' };
+const CARD_BG = ['#F0EDE8', '#EBF0E8', '#E8EDF0', '#F0E8ED', '#EDE8F0'];
 
-function Spin() {
-  return <span style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,.3)', borderTop: '2px solid #fff', borderRadius: '50%', display: 'inline-block', animation: 'spin .7s linear infinite' }} />;
+function Av({ name, sz = 48 }: { name: string; sz?: number }) {
+  const cs = ['#D4C5F9', '#C5D4F9', '#C5F9D4', '#F9D4C5', '#F9C5D4'];
+  return <div style={{ width: sz, height: sz, borderRadius: sz / 3.5, background: cs[name.charCodeAt(0) % cs.length], display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: sz * .38, color: 'var(--ink)', flexShrink: 0, border: '2.5px solid var(--border)' }}>{name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}</div>;
 }
 
-export default function Home() {
+export default function ProfilePage({ params }: { params: { id: string } }) {
   const router = useRouter();
-  const [view, setView] = useState<'land' | 'login' | 'signup'>('land');
-  const [role, setRole] = useState<'founder' | 'investor'>('founder');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState('');
-  const [ok, setOk] = useState('');
+  const sp = useSearchParams();
+  const startupId = sp.get('startup');
+  const [viewer, setViewer] = useState<Profile | null>(null);
+  const [founder, setFounder] = useState<Profile | null>(null);
+  const [startup, setStartup] = useState<Startup | null>(null);
+  const [subbed, setSubbed] = useState(false);
+  const [docs, setDocs] = useState<StartupDocument[]>([]);
+  const [tab, setTab] = useState<'about' | 'team' | 'docs'>('about');
+  const [loading, setLoading] = useState(true);
+  const [subbing, setSubbing] = useState(false);
 
-  const go = (r: string) => router.push(r === 'admin' ? '/dashboard/admin' : r === 'investor' ? '/feed' : '/dashboard/founder');
+  useEffect(() => { load(); }, [params.id, startupId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const auth = async () => {
-    setErr(''); setOk(''); setBusy(true);
-    try {
-      if (view === 'signup') {
-        const { error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: name, role } } });
-        if (error) throw error;
-        setOk('Account created! Check your email to verify, then sign in.');
-        setView('login');
-      } else {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-        const { data: p } = await supabase.from('profiles').select('role').eq('id', data.user.id).single();
-        go(p?.role || 'founder');
-      }
-    } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Something went wrong'); }
-    finally { setBusy(false); }
-  };
+  async function load() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { router.push('/'); return; }
+    const [{ data: v }, { data: f }] = await Promise.all([
+      supabase.from('profiles').select('*').eq('id', user.id).single(),
+      supabase.from('profiles').select('*').eq('id', params.id).single(),
+    ]);
+    setViewer(v); setFounder(f || v);
+    if (startupId) {
+      const [{ data: s }, { data: sub }, { data: d }] = await Promise.all([
+        supabase.from('startups').select('*').eq('id', startupId).single(),
+        supabase.from('subscriptions').select('id').eq('subscriber_id', user.id).eq('startup_id', startupId).eq('status', 'active').single(),
+        supabase.from('startup_documents').select('*').eq('startup_id', startupId).order('created_at'),
+      ]);
+      setStartup(s); setDocs(d || []);
+      setSubbed(!!sub || v?.role === 'admin' || v?.id === params.id);
+    }
+    setLoading(false);
+  }
 
-  const demo = async (r: 'founder' | 'investor' | 'admin') => {
-    setBusy(true); setErr('');
-    try {
-      let res = await supabase.auth.signInWithPassword({ email: DEMO[r], password: 'Demo@12345' });
-      if (res.error) {
-        await supabase.auth.signUp({ email: DEMO[r], password: 'Demo@12345', options: { data: { full_name: `Demo ${r.charAt(0).toUpperCase() + r.slice(1)}`, role: r } } });
-        await new Promise(x => setTimeout(x, 1200));
-        res = await supabase.auth.signInWithPassword({ email: DEMO[r], password: 'Demo@12345' });
-      }
-      go(r);
-    } catch { go(r); }
-    finally { setBusy(false); }
-  };
+  async function subscribe() {
+    if (!viewer || !startup) return;
+    setSubbing(true);
+    await supabase.from('subscriptions').upsert({ subscriber_id: viewer.id, startup_id: startup.id, plan: 'unlock', status: 'active' });
+    setSubbed(true); setSubbing(false);
+  }
 
-  // ── AUTH FORM ──────────────────────────────────────────────
-  if (view !== 'land') return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
-      <nav style={{ padding: '18px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', background: 'rgba(247,246,243,.92)', backdropFilter: 'blur(10px)', position: 'sticky', top: 0, zIndex: 50 }}>
-        <button onClick={() => setView('land')} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 800, fontSize: 17, color: 'var(--text)' }}>
-          <span style={{ width: 30, height: 30, borderRadius: 8, background: 'var(--ink)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: '#fff' }}>▶</span>
-          PitchPilot
-        </button>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-ghost" style={{ padding: '7px 16px', fontSize: 13 }} onClick={() => setView('login')}>Sign in</button>
-          <button className="btn btn-ink" style={{ padding: '7px 16px', fontSize: 13 }} onClick={() => setView('signup')}>Join free</button>
-        </div>
-      </nav>
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 20px' }}>
-        <div style={{ width: '100%', maxWidth: 400 }}>
-          <h1 style={{ fontSize: 32, fontWeight: 800, marginBottom: 6, textAlign: 'center', letterSpacing: '-0.5px' }}>
-            {view === 'login' ? 'Welcome back' : 'Create account'}
-          </h1>
-          <p style={{ color: 'var(--text2)', fontSize: 15, textAlign: 'center', marginBottom: 28 }}>
-            {view === 'login' ? 'Sign in to your PitchPilot account' : 'Get started in seconds'}
-          </p>
-          <div className="card" style={{ padding: 28 }}>
-            {view === 'signup' && <>
-              <div style={{ marginBottom: 14 }}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text2)', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.5px' }}>Full Name</label>
-                <input className="input" value={name} onChange={e => setName(e.target.value)} placeholder="Your name" />
-              </div>
-              <div style={{ marginBottom: 14 }}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text2)', marginBottom: 7, textTransform: 'uppercase', letterSpacing: '.5px' }}>I am a</label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  {(['founder', 'investor'] as const).map(r => (
-                    <button key={r} onClick={() => setRole(r)} style={{ padding: '10px', borderRadius: 9, border: '1.5px solid', borderColor: role === r ? 'var(--ink)' : 'var(--border)', background: role === r ? 'var(--ink)' : 'transparent', color: role === r ? '#fff' : 'var(--text2)', cursor: 'pointer', fontSize: 14, fontWeight: 600, textTransform: 'capitalize', fontFamily: 'inherit', transition: 'all .15s' }}>
-                      {r === 'founder' ? '🚀 ' : '💼 '}{r.charAt(0).toUpperCase() + r.slice(1)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </>}
-            <div style={{ marginBottom: 14 }}>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text2)', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.5px' }}>Email</label>
-              <input className="input" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" onKeyDown={e => e.key === 'Enter' && auth()} />
-            </div>
-            <div style={{ marginBottom: 20 }}>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text2)', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.5px' }}>Password</label>
-              <input className="input" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" onKeyDown={e => e.key === 'Enter' && auth()} />
-            </div>
-            {err && <div style={{ background: 'var(--roseBg)', border: '1px solid var(--roseBorder)', borderRadius: 8, padding: '10px 14px', color: 'var(--rose)', fontSize: 13, marginBottom: 14 }}>{err}</div>}
-            {ok && <div style={{ background: 'var(--greenBg)', border: '1px solid var(--greenBorder)', borderRadius: 8, padding: '10px 14px', color: 'var(--green)', fontSize: 13, marginBottom: 14 }}>{ok}</div>}
-            <button className="btn btn-ink" style={{ width: '100%', padding: '13px', fontSize: 15 }} onClick={auth} disabled={busy}>
-              {busy ? <Spin /> : view === 'login' ? 'Sign In →' : 'Create Account →'}
-            </button>
-            <div style={{ textAlign: 'center', marginTop: 16 }}>
-              <button onClick={() => setView(view === 'login' ? 'signup' : 'login')} style={{ background: 'none', border: 'none', color: 'var(--text2)', fontSize: 13, cursor: 'pointer' }}>
-                {view === 'login' ? "Don't have an account? " : "Already have an account? "}
-                <span style={{ color: 'var(--text)', fontWeight: 700, textDecoration: 'underline' }}>{view === 'login' ? 'Sign up' : 'Sign in'}</span>
-              </button>
-            </div>
-          </div>
-          <div style={{ marginTop: 24 }}>
-            <p style={{ textAlign: 'center', color: 'var(--text3)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 12 }}>Try a demo</p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-              {[['🚀', 'Founder', 'founder'], ['💼', 'Investor', 'investor'], ['⚙', 'Admin', 'admin']].map(([icon, label, r]) => (
-                <button key={r} onClick={() => demo(r as 'founder' | 'investor' | 'admin')} disabled={busy} className="btn btn-ghost" style={{ padding: '10px 8px', fontSize: 13 }}>
-                  {icon} {label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
+  if (loading) return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
+      <div style={{ width: 36, height: 36, border: '2px solid var(--border)', borderTop: '2px solid var(--ink)', borderRadius: '50%', animation: 'spin .7s linear infinite' }} />
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
 
-  // ── LANDING ────────────────────────────────────────────────
-  const features = [
-    { icon: '▶', title: 'Video-First Pitching', desc: 'Under 3-minute elevator videos that let investors truly feel your passion and vision — far beyond any PDF.' },
-    { icon: '✦', title: 'AI-Powered Matching', desc: 'Our engine analyzes 30+ signals to surface the 5 investors most likely to respond to your specific startup.' },
-    { icon: '🔒', title: 'Unlock Full Access', desc: 'Investors subscribe to unlock pitch decks, financials, and direct contact — a subscription model built for trust.' },
-    { icon: '◎', title: 'Ecosystem Hub', desc: 'Grants, accelerators, pitch events, and mentors — all in one place. Never miss a funding opportunity again.' },
+  const fp = founder;
+  const bg = CARD_BG[(fp?.full_name || '').charCodeAt(0) % CARD_BG.length];
+  const mockTeam = [
+    { name: fp?.full_name || 'Founder', role: 'CEO & Co-Founder', badge: 'Founder' },
+    { name: 'Co-Founder', role: 'CTO & Co-Founder', badge: '' },
+    { name: 'Team Member', role: 'Head of Product', badge: '' },
   ];
+  const mockDocs = [
+    { title: 'Pitch Deck', type: 'pitch_deck' as const, locked: !subbed },
+    { title: 'Financial Projections', type: 'financials' as const, locked: !subbed },
+    { title: 'Product Roadmap', type: 'product' as const, locked: !subbed },
+    { title: 'Cap Table & Legal', type: 'legal' as const, locked: !subbed },
+  ];
+  const displayDocs = docs.length > 0
+    ? docs.map(d => ({ ...d, locked: !subbed && !d.is_public }))
+    : mockDocs;
+  const typeIcon: Record<string, string> = { pitch_deck: '📊', financials: '💰', legal: '⚖️', product: '🗺️', other: '📄' };
+
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
-      <nav style={{ padding: '16px 48px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', background: 'rgba(247,246,243,.92)', backdropFilter: 'blur(12px)', position: 'sticky', top: 0, zIndex: 50 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 9, fontWeight: 800, fontSize: 20 }}>
-          <span style={{ width: 34, height: 34, borderRadius: 9, background: 'var(--ink)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 15 }}>▶</span>
-          PitchPilot
-        </div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button className="btn btn-ghost" style={{ padding: '8px 20px' }} onClick={() => setView('login')}>Sign in</button>
-          <button className="btn btn-ink" style={{ padding: '8px 20px' }} onClick={() => setView('signup')}>Get started →</button>
-        </div>
-      </nav>
+      {/* Sticky top bar */}
+      <div style={{ position: 'sticky', top: 0, zIndex: 50, background: 'rgba(247,246,243,.95)', backdropFilter: 'blur(12px)', borderBottom: '1px solid var(--border)', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <button onClick={() => router.back()} style={{ width: 36, height: 36, borderRadius: 9, background: 'var(--surface)', border: '1px solid var(--border)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 19, color: 'var(--text)' }}>‹</button>
+        <div style={{ fontWeight: 700, fontSize: 16, flex: 1 }}>{startup?.name || fp?.full_name}</div>
+        {startup && (subbed
+          ? <span className="tag tag-green" style={{ fontSize: 12 }}>✓ Unlocked</span>
+          : <span className="tag tag-amber" style={{ fontSize: 12 }}>🔒 Locked</span>)}
+      </div>
 
-      {/* Hero */}
-      <div style={{ maxWidth: 880, margin: '0 auto', padding: '90px 32px 80px', textAlign: 'center' }}>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 20, padding: '6px 16px', marginBottom: 32, fontSize: 13, color: 'var(--text2)', fontWeight: 500, boxShadow: 'var(--shadow1)' }}>
-          <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--green)', display: 'inline-block' }} />
-          Now live · India&apos;s first video pitch platform
-        </div>
-        <h1 style={{ fontSize: 'clamp(40px,7.5vw,76px)', fontWeight: 800, lineHeight: 1.1, marginBottom: 22, letterSpacing: '-1.5px', color: 'var(--text)' }}>
-          Where founders pitch.<br />
-          <span style={{ color: 'var(--text2)', fontWeight: 400 }} className="serif">Investors discover.</span>
-        </h1>
-        <p style={{ fontSize: 18, color: 'var(--text2)', lineHeight: 1.7, maxWidth: 540, margin: '0 auto 40px', fontWeight: 400 }}>
-          The premium video-first platform where startup founders showcase their vision and the world&apos;s top investors find their next deal.
-        </p>
-        <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-          <button className="btn btn-ink" style={{ fontSize: 16, padding: '14px 32px', borderRadius: 12 }} onClick={() => setView('signup')}>Start pitching free</button>
-          <button className="btn btn-outline" style={{ fontSize: 16, padding: '14px 32px', borderRadius: 12 }} onClick={() => setView('login')}>Discover startups →</button>
+      {/* Cover */}
+      <div style={{ height: 150, background: bg, position: 'relative' }}>
+        {!subbed && startup && (
+          <div style={{ position: 'absolute', top: 14, right: 14 }}>
+            <button onClick={subscribe} disabled={subbing} className="btn btn-ink" style={{ fontSize: 13, padding: '8px 18px', borderRadius: 9 }}>
+              {subbing ? '…' : '🔓 Unlock · $9/mo'}
+            </button>
+          </div>
+        )}
+        <div style={{ position: 'absolute', bottom: -36, left: 20 }}>
+          <div style={{ border: '3px solid var(--surface)', borderRadius: 18, overflow: 'hidden', borderBottomLeftRadius: 18 }}>
+            <Av name={fp?.full_name || 'F'} sz={72} />
+          </div>
         </div>
       </div>
 
-      {/* Mock feed cards */}
-      <div style={{ maxWidth: 1060, margin: '0 auto', padding: '0 32px 72px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16 }}>
-          {[['NeuralPay', 'FinTech · Seed', '$12K MRR', '#F0EDE8'], ['MedSync', 'HealthTech · Series A', '$45K MRR', '#EBF0E8'], ['GreenTrace', 'CleanTech · Pre-Seed', '3 pilots', '#E8EDF0']].map(([n, s, t, bg]) => (
-            <div key={n} className="card" style={{ overflow: 'hidden', transition: 'box-shadow .2s', cursor: 'pointer' }}>
-              <div style={{ height: 170, background: bg as string, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-                <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'rgba(255,255,255,.8)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, boxShadow: 'var(--shadow2)' }}>▶</div>
-                <div style={{ position: 'absolute', bottom: 10, left: 12, right: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span className="tag" style={{ fontSize: 11, background: 'rgba(255,255,255,.85)', backdropFilter: 'blur(4px)' }}>{s.split(' · ')[0]}</span>
-                  <span style={{ background: 'rgba(0,0,0,.55)', color: '#fff', borderRadius: 5, padding: '2px 7px', fontSize: 11, fontFamily: 'monospace' }}>2:47</span>
+      {/* Content */}
+      <div style={{ paddingTop: 52, padding: '52px 20px 100px' }}>
+        <h1 style={{ fontSize: 22, fontWeight: 800, marginBottom: 3, letterSpacing: '-.3px' }}>{fp?.full_name}</h1>
+        {startup && <div style={{ color: 'var(--text2)', fontSize: 14, marginBottom: 2 }}>Founder of {startup.name}</div>}
+        <div style={{ color: 'var(--text3)', fontSize: 13, marginBottom: 18 }}>{fp?.email}</div>
+
+        {/* Startup card */}
+        {startup && (
+          <div className="card" style={{ padding: 18, marginBottom: 22 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 18, letterSpacing: '-.3px' }}>{startup.name}</div>
+                <div style={{ color: 'var(--text2)', fontSize: 13, marginTop: 2 }}>{startup.tagline}</div>
+              </div>
+              <span className="tag tag-green" style={{ fontSize: 12 }}>{startup.stage}</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
+              {[['📍', startup.location || '—'], ['💰', startup.raise_amount || '—'], ['📈', startup.mrr || '—']].map(([ic, v]) => (
+                <div key={v} style={{ background: 'var(--surface2)', borderRadius: 9, padding: '9px 10px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 16, marginBottom: 2 }}>{ic}</div>
+                  <div style={{ fontSize: 12, fontWeight: 700 }}>{v}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Tabs */}
+        <div style={{ display: 'flex', gap: 4, marginBottom: 20, background: 'var(--s50)', borderRadius: 11, padding: 4 }}>
+          {(['about', 'team', 'docs'] as const).map(t => (
+            <button key={t} onClick={() => setTab(t)} style={{ flex: 1, padding: '9px', borderRadius: 8, border: 'none', background: tab === t ? 'var(--surface)' : 'transparent', color: tab === t ? 'var(--text)' : 'var(--text2)', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s', boxShadow: tab === t ? 'var(--shadow1)' : 'none', textTransform: 'capitalize' }}>{t}</button>
+          ))}
+        </div>
+
+        {/* Tab content */}
+        {tab === 'about' && (
+          <div className="a-up">
+            {startup?.description && (
+              <div style={{ marginBottom: 18 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: .9, marginBottom: 8 }}>About</div>
+                <p style={{ fontSize: 15, lineHeight: 1.7 }}>{startup.description}</p>
+              </div>
+            )}
+            {startup?.traction && (
+              <div style={{ background: 'var(--greenBg)', border: '1px solid var(--greenBorder)', borderRadius: 12, padding: '13px 16px', marginBottom: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--green)', textTransform: 'uppercase', letterSpacing: .9, marginBottom: 5 }}>Traction</div>
+                <div style={{ fontSize: 15, fontWeight: 600 }}>{startup.traction}</div>
+              </div>
+            )}
+            {startup && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                {[['Sector', startup.sector], ['Founded', startup.founded_year || '2023'], ['Team', startup.team_size + ' people'], ['Website', startup.website || '—']].map(([k, v]) => (
+                  <div key={k} className="card" style={{ padding: '13px 14px' }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: .8, marginBottom: 4 }}>{k}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700 }}>{v}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === 'team' && (
+          <div className="a-up" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {mockTeam.map((m, i) => (
+              <div key={i} className="card" style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                <Av name={m.name} sz={44} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: 15 }}>{m.name}</div>
+                  <div style={{ color: 'var(--text2)', fontSize: 13, marginTop: 2 }}>{m.role}</div>
+                </div>
+                {m.badge && <span className="tag tag-green" style={{ fontSize: 11 }}>{m.badge}</span>}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {tab === 'docs' && (
+          <div className="a-up">
+            {!subbed && (
+              <div style={{ background: 'var(--amberBg)', border: '1px solid var(--amberBorder)', borderRadius: 13, padding: '14px 16px', marginBottom: 16, display: 'flex', gap: 10 }}>
+                <span style={{ fontSize: 20 }}>🔒</span>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--amber)', marginBottom: 4 }}>Documents are locked</div>
+                  <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.5 }}>Subscribe for $9/month to access pitch deck, financials, legal docs, and more.</div>
+                  <button onClick={subscribe} disabled={subbing} className="btn btn-ink" style={{ marginTop: 10, fontSize: 13, padding: '8px 18px', borderRadius: 9 }}>
+                    {subbing ? '…' : 'Unlock now — $9/mo'}
+                  </button>
                 </div>
               </div>
-              <div style={{ padding: '13px 16px' }}>
-                <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 3 }}>{n}</div>
-                <div style={{ color: 'var(--text3)', fontSize: 12 }}>{s} · {t}</div>
-              </div>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+              {displayDocs.map((doc, i) => {
+                const locked = 'locked' in doc && doc.locked;
+                return (
+                  <div key={i} className="card" style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, opacity: locked ? .65 : 1 }}>
+                    <div style={{ width: 42, height: 42, borderRadius: 11, background: locked ? 'var(--border)' : 'var(--greenBg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 19, flexShrink: 0 }}>
+                      {locked ? '🔒' : typeIcon[doc.type]}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: locked ? 'var(--text3)' : 'var(--text)' }}>{doc.title}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text3)', textTransform: 'capitalize', marginTop: 1 }}>{doc.type.replace('_', ' ')}</div>
+                    </div>
+                    {!locked && (
+                      <button className="btn btn-green" style={{ fontSize: 12, padding: '6px 14px', borderRadius: 8 }}>View →</button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-          ))}
+          </div>
+        )}
+      </div>
+
+      {/* Sticky unlock bar */}
+      {startup && !subbed && (
+        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: '12px 20px', background: 'rgba(247,246,243,.96)', borderTop: '1px solid var(--border)', backdropFilter: 'blur(12px)', paddingBottom: 'max(12px,env(safe-area-inset-bottom))' }}>
+          <button onClick={subscribe} disabled={subbing} className="btn btn-ink" style={{ width: '100%', padding: '14px', fontSize: 15, borderRadius: 12 }}>
+            {subbing ? 'Processing…' : '🔓 Unlock full access — $9 / month'}
+          </button>
         </div>
-      </div>
-
-      {/* Stats strip */}
-      <div style={{ borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)', background: 'var(--surface)', padding: '48px 32px' }}>
-        <div style={{ maxWidth: 720, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 32, textAlign: 'center' }}>
-          {[['209K+', 'Registered startups in India'], ['$11.6B', 'Raised by Indian startups in 2025'], ['$20B+', 'Global fundraising market size']].map(([v, l]) => (
-            <div key={l}><div style={{ fontSize: 40, fontWeight: 800, letterSpacing: '-1px', marginBottom: 6 }}>{v}</div><div style={{ fontSize: 14, color: 'var(--text2)', lineHeight: 1.4 }}>{l}</div></div>
-          ))}
-        </div>
-      </div>
-
-      {/* Features */}
-      <div style={{ maxWidth: 920, margin: '0 auto', padding: '72px 32px' }}>
-        <h2 style={{ fontSize: 36, fontWeight: 800, textAlign: 'center', letterSpacing: '-0.5px', marginBottom: 48 }}>Everything you need to raise</h2>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 20 }}>
-          {features.map(f => (
-            <div key={f.title} className="card" style={{ padding: '22px 20px' }}>
-              <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--s50)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, marginBottom: 14 }}>{f.icon}</div>
-              <h3 style={{ fontWeight: 700, fontSize: 15, marginBottom: 7 }}>{f.title}</h3>
-              <p style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6 }}>{f.desc}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* CTA */}
-      <div style={{ textAlign: 'center', padding: '64px 32px 80px', borderTop: '1px solid var(--border)' }}>
-        <h2 style={{ fontSize: 40, fontWeight: 800, marginBottom: 14, letterSpacing: '-0.5px' }}>Ready to get funded?</h2>
-        <p style={{ color: 'var(--text2)', fontSize: 16, marginBottom: 32 }}>Join thousands of founders who have already pitched on PitchPilot.</p>
-        <button className="btn btn-ink" style={{ fontSize: 16, padding: '14px 40px', borderRadius: 12 }} onClick={() => setView('signup')}>Create your free profile →</button>
-      </div>
-
-      <div style={{ borderTop: '1px solid var(--border)', padding: '24px 48px', display: 'flex', justifyContent: 'space-between', color: 'var(--text3)', fontSize: 13 }}>
-        <span>© 2025 PitchPilot</span><span>Built for founders, by founders</span>
-      </div>
+      )}
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}} .a-up{animation:fadeUp .28s ease forwards} @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}`}</style>
     </div>
   );
 }

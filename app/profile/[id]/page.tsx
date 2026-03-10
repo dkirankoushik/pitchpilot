@@ -23,7 +23,7 @@ export default function ProfilePage({ params }: { params: { id: string } }) {
   const [loading, setLoading] = useState(true);
   const [subbing, setSubbing] = useState(false);
 
-  useEffect(() => { load(); }, [params.id, startupId]);
+  useEffect(() => { load(); }, [params.id, startupId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function load() {
     const { data: { user } } = await supabase.auth.getUser();

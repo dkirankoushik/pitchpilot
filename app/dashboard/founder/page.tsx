@@ -31,7 +31,7 @@ export default function FounderDash() {
   const [reg, setReg] = useState<Set<string>>(new Set());
   const [form, setForm] = useState({ name: '', tagline: '', description: '', sector: '', stage: '', location: '', raise_amount: '', traction: '', website: '', mrr: '', founded_year: '' });
 
-  useEffect(() => { init(); }, []);
+  useEffect(() => { init(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function init() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -298,7 +298,7 @@ export default function FounderDash() {
                 </div>
               ))}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                {[['sector', 'Sector', SECTORS], ['stage', 'Stage', STAGES]].map(([k, l, opts]) => (
+                {([['sector', 'Sector', SECTORS], ['stage', 'Stage', STAGES]] as [string, string, string[]][]).map(([k, l, opts]) => (
                   <div key={k}>
                     <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text2)', marginBottom: 5, textTransform: 'uppercase', letterSpacing: .7 }}>{l}</label>
                     <select className="input" value={(form as Record<string, string>)[k]} onChange={e => setForm(p => ({ ...p, [k]: e.target.value }))} style={{ background: 'var(--surface)' }}>

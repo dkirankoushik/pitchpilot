@@ -158,7 +158,7 @@ export default function FeedPage() {
   const feedRef = useRef<HTMLDivElement>(null);
   const sectors = ['All', 'FinTech', 'HealthTech', 'CleanTech', 'EdTech', 'AI/ML'];
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function load() {
     const { data: { user: u } } = await supabase.auth.getUser();

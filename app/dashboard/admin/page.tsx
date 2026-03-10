@@ -24,7 +24,7 @@ export default function AdminDash() {
   const [evForm, setEvForm] = useState({ title: '', type: 'Competition', organization: '', prize: '', deadline: '', location: '', description: '' });
   const [savingEv, setSavingEv] = useState(false);
 
-  useEffect(() => { init(); }, []);
+  useEffect(() => { init(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function init() {
     const { data: { user } } = await supabase.auth.getUser();

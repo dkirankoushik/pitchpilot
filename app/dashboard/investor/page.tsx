@@ -36,7 +36,7 @@ export default function InvestorDash() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const sectors = ['All', 'FinTech', 'HealthTech', 'CleanTech', 'EdTech', 'AI/ML'];
 
-  useEffect(() => { init(); }, []);
+  useEffect(() => { init(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function init() {
     const { data: { user } } = await supabase.auth.getUser();
