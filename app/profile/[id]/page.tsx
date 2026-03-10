@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { supabase, type Profile, type Startup, type StartupDocument } from '@/lib/supabase';
+import { supabase, getSession, type Profile, type Startup, type StartupDocument } from '@/lib/supabase';
 
 const CARD_BG = ['#F0EDE8', '#EBF0E8', '#E8EDF0', '#F0E8ED', '#EDE8F0'];
 
@@ -41,7 +41,7 @@ function ProfileContent({ id }: { id: string }) {
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser();
+      const session = await getSession(); const user = session?.user ?? null;
       if (!user) { router.push('/'); return; }
       const [{ data: v }, { data: f }] = await Promise.all([
         supabase.from('profiles').select('*').eq('id', user.id).single(),

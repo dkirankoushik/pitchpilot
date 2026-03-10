@@ -1,8 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
-export const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://placeholder.supabase.co';
+const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? 'placeholder';
+
+export const supabase = createClient(url, key);
+
 export type UserRole = 'founder' | 'investor' | 'admin';
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 export type InviteStatus = 'pending' | 'viewed' | 'interested' | 'passed' | 'connected';
@@ -13,3 +15,9 @@ export interface PitchInvite { id: string; startup_id: string; investor_id: stri
 export interface AppEvent { id: string; title: string; type: 'Competition' | 'Grant' | 'Accelerator' | 'Conference'; organization: string | null; description: string | null; prize: string | null; deadline: string | null; location: string | null; tags: string[]; apply_url: string | null; is_urgent: boolean; created_at: string; }
 export interface Subscription { id: string; subscriber_id: string; startup_id: string; plan: 'unlock' | 'pro'; status: 'active' | 'cancelled'; created_at: string; }
 export interface StartupDocument { id: string; startup_id: string; title: string; type: 'pitch_deck' | 'financials' | 'legal' | 'product' | 'other'; url: string | null; is_public: boolean; created_at: string; }
+
+/** Fast auth check — reads local session, no network call */
+export async function getSession() {
+  const { data } = await supabase.auth.getSession();
+  return data.session;
+}

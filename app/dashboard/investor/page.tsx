@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase, type Profile, type Startup, type InvestorProfile, type AppEvent } from '@/lib/supabase';
+import { supabase, getSession, type Profile, type Startup, type InvestorProfile, type AppEvent } from '@/lib/supabase';
 import { SideNav, BottomNav, StatCard } from '@/components/Nav';
 
 const CARD_BG = ['#F0EDE8', '#EBF0E8', '#E8EDF0', '#F0E8ED', '#EDE8F0'];
@@ -39,7 +39,7 @@ export default function InvestorDash() {
   useEffect(() => { init(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function init() {
-    const { data: { user } } = await supabase.auth.getUser();
+    const session = await getSession(); const user = session?.user ?? null;
     if (!user) { router.push('/'); return; }
     const [{ data: p }, { data: ip }, { data: ss }, { data: ev }, { data: subData }, { data: savedData }] = await Promise.all([
       supabase.from('profiles').select('*').eq('id', user.id).single(),

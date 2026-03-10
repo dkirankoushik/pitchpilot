@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase, type Profile, type Startup, type AppEvent } from '@/lib/supabase';
+import { supabase, getSession, type Profile, type Startup, type AppEvent } from '@/lib/supabase';
 import { SideNav, BottomNav, StatCard } from '@/components/Nav';
 
 const SECTORS = ['FinTech', 'HealthTech', 'EdTech', 'CleanTech', 'SaaS', 'AI/ML', 'E-Commerce', 'DeepTech'];
@@ -34,7 +34,7 @@ export default function FounderDash() {
   useEffect(() => { init(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function init() {
-    const { data: { user } } = await supabase.auth.getUser();
+    const session = await getSession(); const user = session?.user ?? null;
     if (!user) { router.push('/'); return; }
     const [{ data: p }, { data: s }, { data: ev }, { data: inv }] = await Promise.all([
       supabase.from('profiles').select('*').eq('id', user.id).single(),
@@ -49,7 +49,7 @@ export default function FounderDash() {
 
   async function save() {
     setSaving(true);
-    const { data: { user } } = await supabase.auth.getUser();
+    const session = await getSession(); const user = session?.user ?? null;
     if (!user) return;
     const payload = { ...form, founder_id: user.id, is_public: true, status: 'active' as const, approval_status: 'pending' as const, founded_year: form.founded_year ? parseInt(form.founded_year) : null };
     if (startup?.id) await supabase.from('startups').update(payload).eq('id', startup.id);
@@ -269,7 +269,7 @@ export default function FounderDash() {
                           {ev.prize && <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: .7 }}>Prize</div><div style={{ fontWeight: 800, fontSize: 14, color: 'var(--green)', marginTop: 2 }}>{ev.prize}</div></div>}
                           {ev.deadline && <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: .7 }}>Deadline</div><div style={{ fontWeight: 800, fontSize: 14, color: 'var(--amber)', marginTop: 2 }}>{new Date(ev.deadline).toLocaleDateString('en', { month: 'short', day: 'numeric' })}</div></div>}
                         </div>
-                        <button onClick={async () => { const { data: { user } } = await supabase.auth.getUser(); if (user) { await supabase.from('event_registrations').upsert({ event_id: ev.id, user_id: user.id }); setReg(p => new Set([...p, ev.id])); } }} className={reg.has(ev.id) ? 'btn btn-outline' : 'btn btn-ink'} style={{ width: '100%', padding: '10px', fontSize: 13, borderRadius: 10 }}>
+                        <button onClick={async () => { const session = await getSession(); const user = session?.user ?? null; if (user) { await supabase.from('event_registrations').upsert({ event_id: ev.id, user_id: user.id }); setReg(p => new Set([...p, ev.id])); } }} className={reg.has(ev.id) ? 'btn btn-outline' : 'btn btn-ink'} style={{ width: '100%', padding: '10px', fontSize: 13, borderRadius: 10 }}>
                           {reg.has(ev.id) ? '✓ Registered' : 'Apply / Register'}
                         </button>
                       </div>

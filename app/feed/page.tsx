@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase, type Startup, type Profile } from '@/lib/supabase';
+import { supabase, getSession, type Startup, type Profile } from '@/lib/supabase';
 
 const CARD_BG = ['#F0EDE8', '#EBF0E8', '#E8EDF0', '#F0E8ED', '#EDE8F0', '#F0F0E8'];
 
@@ -161,7 +161,7 @@ export default function FeedPage() {
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function load() {
-    const { data: { user: u } } = await supabase.auth.getUser();
+    const session = await getSession(); const u = session?.user ?? null;
     if (!u) { router.push('/'); return; }
     const [{ data: prof }, { data: real }, { data: subData }] = await Promise.all([
       supabase.from('profiles').select('*').eq('id', u.id).single(),

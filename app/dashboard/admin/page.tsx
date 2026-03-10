@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase, type Profile, type Startup, type AppEvent } from '@/lib/supabase';
+import { supabase, getSession, type Profile, type Startup, type AppEvent } from '@/lib/supabase';
 import { SideNav, BottomNav, StatCard } from '@/components/Nav';
 
 function Av({ name, sz = 34 }: { name: string; sz?: number }) {
@@ -27,7 +27,7 @@ export default function AdminDash() {
   useEffect(() => { init(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function init() {
-    const { data: { user } } = await supabase.auth.getUser();
+    const session = await getSession(); const user = session?.user ?? null;
     if (!user) { router.push('/'); return; }
     const { data: p } = await supabase.from('profiles').select('*').eq('id', user.id).single();
     if (p?.role !== 'admin') { router.push('/'); return; }
