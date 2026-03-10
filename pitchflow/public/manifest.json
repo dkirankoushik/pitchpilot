@@ -1,0 +1,20 @@
+{
+  "name": "PitchFlow – Startup Investor Platform",
+  "short_name": "PitchFlow",
+  "description": "The unified video-powered platform where founders pitch, investors discover, and ecosystems connect",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#060914",
+  "theme_color": "#7c3aed",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "categories": ["business", "finance", "networking"],
+  "screenshots": [],
+  "shortcuts": [
+    { "name": "Pitch Feed", "url": "/dashboard/investor", "description": "Browse startup pitches" },
+    { "name": "My Startup", "url": "/dashboard/founder", "description": "Manage your startup" }
+  ]
+}
