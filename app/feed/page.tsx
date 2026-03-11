@@ -164,7 +164,7 @@ export default function FeedPage() {
             <VideoCard key={i} post={post} currentUser={userId} />
           ))}
           <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>
-            You're all caught up · Check back soon for new pitches
+            You&apos;re all caught up · Check back soon for new pitches
           </div>
         </div>
       </main>
