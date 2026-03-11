@@ -193,9 +193,9 @@ export default function FounderDashboard() {
               <div key={key} style={{ marginBottom: 13 }}>
                 <label className="label">{lb}</label>
                 {type === 'textarea' ? (
-                  <textarea className="input" style={{ minHeight: 80, resize: 'vertical' }} value={(form as Record<string, string>)[key] || ''} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} placeholder={ph} />
+                  <textarea className="input" style={{ minHeight: 80, resize: 'vertical' }} value={String((form as unknown as Record<string, unknown>)[key] ?? '')} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} placeholder={ph} />
                 ) : (
-                  <input className="input" type={type} value={(form as Record<string, string>)[key] || ''} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} placeholder={ph} />
+                  <input className="input" type={type} value={String((form as unknown as Record<string, unknown>)[key] ?? '')} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} placeholder={ph} />
                 )}
               </div>
             ))}
