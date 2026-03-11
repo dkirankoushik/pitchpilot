@@ -53,7 +53,7 @@ export default function DiscoverPage() {
 
         <div style={{ maxWidth: 480, margin: '0 auto' }}>
           {/* Search */}
-          <div style={{ padding: '12px 16px', background: 'var(--surface)', borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, zIndex: 10, background: 'rgba(247,246,243,.95)', backdropFilter: 'blur(12px)' }}>
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, zIndex: 10, background: 'rgba(247,246,243,.95)', backdropFilter: 'blur(12px)' }}>
             <div style={{ position: 'relative', marginBottom: 10 }}>
               <span style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)', fontSize: 16 }}>🔍</span>
               <input className="input" style={{ paddingLeft: 38 }} value={search} onChange={e => setSearch(e.target.value)} placeholder="Search startups, sectors..." />

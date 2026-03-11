@@ -38,7 +38,7 @@ export default function ActivityPage() {
       <main className="main-content">
         <div className="top-bar"><span className="top-logo">Activity</span></div>
         <div style={{ maxWidth: 480, margin: '0 auto' }}>
-          <div style={{ padding: '12px 16px', background: 'var(--surface)', borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, background: 'rgba(247,246,243,.95)', backdropFilter: 'blur(12px)', zIndex: 10 }}>
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, background: 'rgba(247,246,243,.95)', backdropFilter: 'blur(12px)', zIndex: 10 }}>
             <div style={{ fontSize: 20, fontWeight: 800, display: 'none' }}>Activity</div>
           </div>
           {/* Sections */}

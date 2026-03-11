@@ -63,7 +63,7 @@ export default function FounderDashboard() {
 
         <div style={{ maxWidth: 480, margin: '0 auto' }}>
           {/* Tabs */}
-          <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: 'var(--surface)', position: 'sticky', top: 0, zIndex: 9, background: 'rgba(247,246,243,.95)', backdropFilter: 'blur(12px)' }}>
+          <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, zIndex: 9, background: 'rgba(247,246,243,.95)', backdropFilter: 'blur(12px)' }}>
             {(['overview', 'pitch', 'events'] as const).map(t => (
               <button key={t} onClick={() => setActiveTab(t)}
                 style={{ flex: 1, padding: '12px', border: 'none', background: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', color: activeTab === t ? 'var(--ink)' : 'var(--text2)', borderBottom: '2px solid', borderBottomColor: activeTab === t ? 'var(--ink)' : 'transparent', transition: 'all .12s', textTransform: 'capitalize' }}>
